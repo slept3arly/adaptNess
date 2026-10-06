@@ -12,7 +12,16 @@ internal static class Program
     {
         if (args.Contains("--self-test", StringComparer.OrdinalIgnoreCase))
         {
-            SelfTests.Run();
+            try
+            {
+                SelfTests.Run();
+                Environment.ExitCode = 0;
+            }
+            catch (Exception exception)
+            {
+                AppLog.Error("Self-tests failed.", exception);
+                Environment.ExitCode = 1;
+            }
             return;
         }
 

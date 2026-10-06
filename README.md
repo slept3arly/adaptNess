@@ -94,4 +94,4 @@ Run the built-in deterministic checks:
 dotnet run --project .\AdaptNess.csproj -- --self-test
 ```
 
-There is no separate test project in this MVP; use the self-tests above for the adaptive-control and luminance checks.
+There is no separate test project in this MVP; use the self-tests above for the adaptive-control and luminance checks. The tray build does not open a console, so the command reports success through its exit code and writes the result to `%LocalAppData%\AdaptNess\adaptNess.log`.

@@ -10,6 +10,7 @@
     <AssemblyName>AdaptNess</AssemblyName>
     <RootNamespace>AdaptNess</RootNamespace>
     <Product>AdaptNess</Product>
+    <Description>Local adaptive display brightness utility</Description>
     <Version>0.1.0</Version>
     <FileVersion>0.1.0.0</FileVersion>
     <InformationalVersion>0.1.0</InformationalVersion>

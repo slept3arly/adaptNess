@@ -7,6 +7,7 @@ internal sealed class AdaptNessApplicationContext : ApplicationContext
 {
     private readonly AdaptiveEngineHost engineHost = new();
     private readonly NotifyIcon trayIcon;
+    private readonly ContextMenuStrip trayMenu;
     private readonly ToolStripMenuItem enabledItem;
     private readonly ToolStripMenuItem pauseItem;
     private readonly System.Windows.Forms.Timer pauseTimer;
@@ -20,19 +21,19 @@ internal sealed class AdaptNessApplicationContext : ApplicationContext
         settings = SettingsStore.Load();
         enabledItem = new ToolStripMenuItem();
         pauseItem = new ToolStripMenuItem("Pause for 15 minutes", null, async (_, _) => await RunUiActionAsync(PauseAsync));
-        var menu = new ContextMenuStrip();
+        trayMenu = new ContextMenuStrip();
         enabledItem.Click += async (_, _) => await RunUiActionAsync(() => SetEnabledAsync(!settings.AdaptiveEnabled || paused));
-        menu.Items.Add(enabledItem);
-        menu.Items.Add(pauseItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Settings", null, (_, _) => ShowSettings());
-        menu.Items.Add("Exit", null, async (_, _) => await RunUiActionAsync(ExitAsync));
+        trayMenu.Items.Add(enabledItem);
+        trayMenu.Items.Add(pauseItem);
+        trayMenu.Items.Add(new ToolStripSeparator());
+        trayMenu.Items.Add("Settings", null, (_, _) => ShowSettings());
+        trayMenu.Items.Add("Exit", null, async (_, _) => await RunUiActionAsync(ExitAsync));
 
         trayIcon = new NotifyIcon
         {
             Icon = SystemIcons.Information,
             Text = "AdaptNess",
-            ContextMenuStrip = menu,
+            ContextMenuStrip = trayMenu,
             Visible = true
         };
         trayIcon.MouseUp += async (_, eventArgs) =>
@@ -121,13 +122,15 @@ internal sealed class AdaptNessApplicationContext : ApplicationContext
         if (exiting) return;
         exiting = true;
         pauseTimer.Stop();
+        settingsForm?.Close();
         trayIcon.Visible = false;
         try { await engineHost.StopAsync(); }
         finally
         {
             trayIcon.Dispose();
+            trayMenu.Dispose();
             pauseTimer.Dispose();
-            engineHost.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await engineHost.DisposeAsync();
             ExitThread();
         }
     }

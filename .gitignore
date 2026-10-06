@@ -15,6 +15,9 @@ graphify-out/
 logs/
 *.log
 settings.json
+*.local.json
+.env
+.env.*
 
 # Temporary files
 *.tmp
