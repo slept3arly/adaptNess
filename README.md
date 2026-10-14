@@ -1,97 +1,74 @@
 # AdaptNess
 
-AdaptNess is a lightweight Windows system-tray utility that adjusts the primary laptop display’s brightness from the visual brightness of the content currently on screen.
+AdaptNess is a Windows system tray application that adjusts display brightness from the average luminance of the primary desktop. Darker screen content maps to a higher brightness target; brighter content maps to a lower one.
 
-Dark content maps to a higher panel brightness and bright content maps to a lower one. AdaptNess runs locally in the background and can be enabled, disabled, paused, or exited from its tray icon.
-
-## Privacy
-
-Screen analysis is fully local, transient, and in memory only.
-
-- No screenshots are saved.
-- No screen data is uploaded, streamed, or transmitted.
-- No network services, telemetry, analytics, accounts, OCR, AI models, webcam, or microphone access are used.
-- Diagnostic logs contain operational events only; they never contain screen images, pixels, or screen content.
+The project targets Windows and .NET 10. The current project version is 0.1.0. This is an early source project; the checkout contains no installer or release binaries.
 
 ## Features
 
-- Primary-display brightness control through the Windows WMI monitor APIs.
-- Small native in-memory display sample (32×18) and perceived-luminance analysis.
-- Inverted, smoothed adaptive brightness mapping with bounded 28–50% automatic output by default.
-- Hysteresis, rate limiting, monotonic convergence, and protection against treating AdaptNess writes as manual brightness changes.
-- System-tray enable/disable control, 15-minute pause, settings, and clean exit.
-- Persisted minimum/maximum automatic brightness, enabled state, and optional Start with Windows.
-- Single-instance protection.
+- Samples the primary desktop into a 32×18 in-memory buffer and calculates perceived luminance.
+- Smooths the measured luminance and moves brightness toward a stable target in bounded steps.
+- Reads and sets brightness through the Windows WMI monitor brightness classes.
+- Provides tray controls to enable or disable adaptation, pause it for 15 minutes, open settings, or exit.
+- Saves the automatic brightness range, enabled state, and optional Start with Windows preference.
+- Prevents a second AdaptNess process from starting.
 
-## Requirements
+## Requirements and hardware support
 
-- Windows 11 (Windows 10 may work, but is not the primary target).
-- .NET SDK 10 or a compatible .NET 10 runtime.
-- A display whose internal-panel brightness is exposed through `root\WMI` `WmiMonitorBrightness` and `WmiMonitorBrightnessMethods`.
+- Windows 10 or later and the .NET 10 SDK to build.
+- The .NET 10 Windows Desktop Runtime to run a framework-dependent build.
+- A display driver that exposes the WMI classes `WmiMonitorBrightness` and `WmiMonitorBrightnessMethods` in `root\WMI`.
 
-AdaptNess is intended for the primary internal display. External monitors and multi-monitor selection are not supported in this first release.
+Screen sampling uses the primary desktop. AdaptNess does not offer display selection. For brightness, it reads the first WMI monitor brightness result and sends a write to each brightness-method instance returned by WMI. Actual behavior therefore depends on the display and driver; external displays and multi-display setups are not selectable or specifically supported.
 
-## Installation and build
+## Build and run
 
-From Windows PowerShell, using the Windows .NET SDK:
-
-```powershell
-Set-Location '\\wsl$\Ubuntu-24.04\home\lenovowsl\Development\Projects\AdaptNess'
-dotnet build -c Release
-```
-
-Run the release build:
+The repository can be kept in WSL while builds and application runs use the Windows .NET SDK. In Windows PowerShell, change to this checkout's WSL UNC path, then run:
 
 ```powershell
-dotnet run -c Release --project .\AdaptNess.csproj
+Set-Location '\\wsl.localhost\Ubuntu-24.04\home\lenovowsl\Development\Projects\AdaptNess'
+dotnet build .\AdaptNess.csproj
+dotnet run --project .\AdaptNess.csproj
 ```
 
-The program starts in the notification area. It does not need a console window during normal use.
+Replace the example path with the UNC path for your WSL distribution and checkout. The normal application is a `WinExe`, so it starts without a console window.
 
-## Usage
-
-- Left-click the tray icon to toggle adaptive brightness.
-- Right-click it for Enable/Disable, Pause for 15 minutes, Settings, and Exit.
-- Choose **Settings** to set the automatic minimum and maximum brightness and optionally enable Start with Windows.
-- Use **Exit** to stop analysis and release resources cleanly.
-
-When adaptive brightness is disabled or paused, AdaptNess stops screen capture and analysis and leaves the current physical brightness unchanged.
-
-## Configuration
-
-Defaults:
-
-- Automatic range: 28–50%
-- Analysis frequency: 4 Hz
-- EMA smoothing: 0.7 seconds
-- Deadband: 4 brightness points
-- Maximum automatic step: 4 brightness points
-
-Settings and the optional local diagnostic log are stored under `%LocalAppData%\AdaptNess`. The log is bounded to 512 KB and contains no screen content.
-
-Start with Windows is disabled by default. When enabled, AdaptNess writes a per-user entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; it does not require administrator privileges or install a service.
-
-## How it works
-
-AdaptNess samples the primary desktop directly into a small native buffer with Win32 GDI, calculates perceived luminance (`0.2126R + 0.7152G + 0.0722B`), then applies exponential smoothing and target hysteresis. Brightness changes are rate-limited and always step monotonically toward the current stable target.
-
-Brightness is read and set through the Windows WMI monitor classes. Recent automatic WMI writes are tracked so their readback is not mistaken for a manual user adjustment. A genuine manual adjustment becomes a bounded user preference offset.
-
-## Known limitations
-
-- Primary display only.
-- Requires WMI brightness support from the display/driver.
-- Uses the current native GDI sampling implementation; it is intentionally kept simple for this MVP.
-- No installer, system-tray customization, or advanced configuration profiles.
-
-## Development setup
-
-The source repository is managed in WSL, but AdaptNess is built and run natively from Windows PowerShell using the Windows .NET SDK. No Visual Studio, Git for Windows, or .NET installation in WSL is required.
-
-Run the built-in deterministic checks:
+The self-tests run before the tray application starts and return a process exit code:
 
 ```powershell
 dotnet run --project .\AdaptNess.csproj -- --self-test
+if ($LASTEXITCODE -ne 0) { throw "AdaptNess self-tests failed: $LASTEXITCODE" }
 ```
 
-There is no separate test project in this MVP; use the self-tests above for the adaptive-control and luminance checks. The tray build does not open a console, so the command reports success through its exit code and writes the result to `%LocalAppData%\AdaptNess\adaptNess.log`.
+Create a Release build with:
+
+```powershell
+dotnet build .\AdaptNess.csproj -c Release
+```
+
+The executable and supporting build output are placed under `bin\Release\net10.0-windows`. This is a build output, not a packaged installer. The project does not enable self-contained publishing.
+
+## Tray controls and settings
+
+Left-click the tray icon to toggle adaptive brightness. Right-click it to enable or disable adaptation, pause for 15 minutes, open Settings, or exit. While disabled or paused, capture and analysis stop and AdaptNess does not issue brightness updates. The 15-minute pause then re-enables adaptation if the application is still running.
+
+Settings let you choose the minimum and maximum automatic brightness, enable or disable adaptation, and set whether AdaptNess starts with Windows. The default automatic range is 28–50%; values are constrained to 1–99%, with the maximum above the minimum. Other control values are fixed in the current implementation: 250 ms analysis interval, 0.7 s exponential smoothing time, 4-point target deadband, 650 ms minimum between brightness writes, and a maximum 4-point step.
+
+Settings and the log are stored in `%LocalAppData%\AdaptNess` (`settings.json` and `adaptNess.log`). Start with Windows is off by default. When enabled, AdaptNess writes a per-user value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; it does not install a service.
+
+## Privacy
+
+Screen samples are processed in memory; the application does not save the captured pixel buffer. The source contains no network client or upload path. The local log records operational data, including luminance measurements, brightness targets and readbacks, and exception messages. Logging failures are ignored so they do not stop display control.
+
+For details about capture, local data, and startup registration, see [Privacy and security](docs/PRIVACY.md).
+
+## Limitations
+
+- The capture source is the primary desktop and there is no display selector.
+- Brightness control requires compatible WMI support from the display driver. AdaptNess cannot make that interface available when the hardware or driver does not expose it.
+- Screen capture can fail; while it does, the current brightness is held and capture is retried.
+- There is no installer, automatic updater, profile system, or release artifact in this checkout.
+
+## Development
+
+Source and Git are managed in WSL; use the Windows host's .NET SDK to build, run, and check the app. No .NET SDK or Git for Windows installation in WSL is required. See [Development](docs/DEVELOPMENT.md) for setup, commands, and troubleshooting. The implementation and runtime flow are described in [Architecture](docs/ARCHITECTURE.md).
